@@ -1,0 +1,80 @@
+{
+  "version": "2025.0",
+  "waypoints": [
+    {
+      "anchor": {
+        "x": 1.04825,
+        "y": 1.0
+      },
+      "prevControl": null,
+      "nextControl": {
+        "x": 1.720099431818182,
+        "y": 2.529261363636363
+      },
+      "isLocked": false,
+      "linkedName": "Station 2"
+    },
+    {
+      "anchor": {
+        "x": 3.24,
+        "y": 4.191850800000001
+      },
+      "prevControl": {
+        "x": 2.4928977272727275,
+        "y": 3.318678977272727
+      },
+      "nextControl": null,
+      "isLocked": false,
+      "linkedName": "A"
+    }
+  ],
+  "rotationTargets": [],
+  "constraintZones": [
+    {
+      "name": "Constraints Zone",
+      "minWaypointRelativePos": 0.92,
+      "maxWaypointRelativePos": 1.0,
+      "constraints": {
+        "maxVelocity": 1.0,
+        "maxAcceleration": 2.0,
+        "maxAngularVelocity": 540.0,
+        "maxAngularAcceleration": 480.0,
+        "nominalVoltage": 12.0,
+        "unlimited": false
+      }
+    }
+  ],
+  "pointTowardsZones": [],
+  "eventMarkers": [
+    {
+      "name": "Prepare to Score",
+      "waypointRelativePos": 0.5590817015530047,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "Prepare to Score"
+        }
+      }
+    }
+  ],
+  "globalConstraints": {
+    "maxVelocity": 3.2,
+    "maxAcceleration": 2.0,
+    "maxAngularVelocity": 540.0,
+    "maxAngularAcceleration": 480.0,
+    "nominalVoltage": 12.0,
+    "unlimited": false
+  },
+  "goalEndState": {
+    "velocity": 0,
+    "rotation": 0.0
+  },
+  "reversed": false,
+  "folder": "PathPlanner Paths - Stage 3 & 5",
+  "idealStartingState": {
+    "velocity": 0,
+    "rotation": 55.0
+  },
+  "useDefaultConstraints": false
+}

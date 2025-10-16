@@ -1,0 +1,31 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "path",
+          "data": {
+            "pathName": "S2 to G"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Score"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "1 Meter Back from G"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": "Test Autos",
+  "choreoAuto": false
+}

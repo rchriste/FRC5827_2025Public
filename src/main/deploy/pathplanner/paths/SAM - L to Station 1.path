@@ -1,0 +1,77 @@
+{
+  "version": "2025.0",
+  "waypoints": [
+    {
+      "anchor": {
+        "x": 3.71338105267,
+        "y": 5.041318270420001
+      },
+      "prevControl": null,
+      "nextControl": {
+        "x": 2.4347301136363644,
+        "y": 5.828196022727273
+      },
+      "isLocked": false,
+      "linkedName": "L"
+    },
+    {
+      "anchor": {
+        "x": 1.04825,
+        "y": 7.0518
+      },
+      "prevControl": {
+        "x": 2.2269886363636364,
+        "y": 5.986079545454545
+      },
+      "nextControl": null,
+      "isLocked": false,
+      "linkedName": "Station 1"
+    }
+  ],
+  "rotationTargets": [],
+  "constraintZones": [],
+  "pointTowardsZones": [],
+  "eventMarkers": [
+    {
+      "name": "Lower Elevator",
+      "waypointRelativePos": 0,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "Lower Elevator"
+        }
+      }
+    },
+    {
+      "name": "Prepare to Intake",
+      "waypointRelativePos": 0.5,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "Prepare to Intake"
+        }
+      }
+    }
+  ],
+  "globalConstraints": {
+    "maxVelocity": 4.0,
+    "maxAcceleration": 4.2,
+    "maxAngularVelocity": 540.0,
+    "maxAngularAcceleration": 480.0,
+    "nominalVoltage": 12.0,
+    "unlimited": false
+  },
+  "goalEndState": {
+    "velocity": 0,
+    "rotation": -55.0
+  },
+  "reversed": false,
+  "folder": "PathPlanner Paths - Stage 4",
+  "idealStartingState": {
+    "velocity": 0,
+    "rotation": -59.99999999999999
+  },
+  "useDefaultConstraints": true
+}
