@@ -240,6 +240,10 @@ public class RobotContainer {
         registerNamedCommands();
 
         // Simple example autonomous for testing (drive forward then stop).
+        // This is just a safe default so the robot will do *something* if no auto is selected.
+        // In real competition, the dashboard `AutoChooser` overrides this:
+        //  - `autoChooser.onChange(this::updateAutonomousCommand)` listens for selection changes
+        //  - `updateAutonomousCommand()` (below) replaces `auto` with the chosen routine
         auto =
                 Commands.sequence(
                         Commands.run(() -> drive.runVelocity(new ChassisSpeeds(1, 0, 0)), drive)
