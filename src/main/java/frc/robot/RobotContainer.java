@@ -21,10 +21,20 @@ import frc.robot.subsystems.endEffector.*;
 import frc.robot.subsystems.vision.*;
 
 /**
- * This class is where the bulk of the robot should be declared. Since Command-based is a
- * "declarative" paradigm, very little robot logic should actually be handled in the {@link Robot}
- * periodic methods (other than the scheduler calls). Instead, the structure of the robot (including
- * subsystems, commands, and button mappings) should be declared here.
+ * RobotContainer is the "wiring harness" of our software.
+ *
+ * <p>If you are new to command-based programming, think of this class as the place where we:
+ *
+ * <ul>
+ *   <li>Create each {@code Subsystem} (drive, elevator, end effector, etc.). A subsystem represents
+ *       one physical part of the robot that we control.
+ *   <li>Create or reference {@code Command}s that tell subsystems what to do.
+ *   <li>Bind controller buttons/triggers to those commands.
+ *   <li>Set up autonomous mode by choosing commands to run automatically.
+ * </ul>
+ *
+ * <p>Because command-based is a declarative framework, the {@link Robot} class mostly just runs the
+ * scheduler each loop. All the interesting setup happens here.
  */
 public class RobotContainer {
     // Subsystems
@@ -42,11 +52,28 @@ public class RobotContainer {
     // Controller
     private final CommandXboxController controller = new CommandXboxController(0);
 
-    /** The container for the robot. Contains subsystems, OI devices, and commands. */
+    /**
+     * Construct the robot container.
+     *
+     * <p>IMPORTANT: The first thing we do is look at {@link Constants#currentMode}. This tells us
+     * which hardware is actually on the robot right now (competition bot vs. Agnes swerve bot vs.
+     * simulator). We then create each subsystem using the correct IO implementation for that mode.
+     *
+     * <p>This pattern is used by AdvantageKit: each subsystem is split into:
+     *
+     * <ul>
+     *   <li>{@code Subsystem} class (high-level behavior, commands, logging)
+     *   <li>{@code SubsystemIO} interface (what hardware functions exist)
+     *   <li>{@code SubsystemIOReal / SubsystemIOTalonFX / SubsystemIOSim} implementations (how to
+     *       talk to real motors/sensors or a simulator)
+     * </ul>
+     */
     public RobotContainer() {
         switch (Constants.currentMode) {
             case COMPETITION:
-                // Real robot, instantiate hardware IO implementations
+                // COMPETITION MODE:
+                // We are running on the full competition robot ("Jacques").
+                // Instantiate IO classes that talk to real hardware.
                 drive =
                         new Drive(
                                 new GyroIOPigeon2(),
@@ -55,6 +82,10 @@ public class RobotContainer {
                                 new ModuleIOTalonFX(TunerConstants.BackLeft),
                                 new ModuleIOTalonFX(TunerConstants.BackRight));
 
+                // Vision uses PhotonVision cameras and AprilTags to estimate robot pose.
+                // We pass method references into Vision so it can:
+                //  - call drive.addVisionMeasurement(...) when it has a new pose estimate
+                //  - read the current drive pose for filtering checks
                 vision =
                         new Vision(
                                 drive::addVisionMeasurement,
@@ -72,7 +103,7 @@ public class RobotContainer {
                                         VisionConstants.camera3Name,
                                         VisionConstants.robotToCamera3));
 
-                // Disable climb for now
+                // Climb subsystem (currently enabled, but you can disable by swapping IO to empty).
                 climb = new Climb(new ClimbIOTalonFX() {});
 
                 endEffector = new EndEffector(new EndEffectorIONeo550());
@@ -82,7 +113,9 @@ public class RobotContainer {
                 break;
 
             case AGNES:
-                // Real robot, mk3 swerve, no vision
+                // AGNES MODE:
+                // This is our smaller/dev swerve-only robot ("Agnes").
+                // It has drive hardware but not the full set of mechanisms or vision.
                 drive =
                         new Drive(
                                 new GyroIOPigeon2(),
@@ -91,6 +124,9 @@ public class RobotContainer {
                                 new ModuleIOTalonFX(TunerConstants.BackLeft),
                                 new ModuleIOTalonFX(TunerConstants.BackRight));
 
+                // No physical cameras on Agnes, so VisionIO is left empty.
+                // The Vision subsystem still exists so the rest of the code doesn't need special
+                // cases.
                 vision =
                         new Vision(
                                 drive::addVisionMeasurement,
@@ -102,13 +138,17 @@ public class RobotContainer {
 
                 climb = new Climb(new ClimbIOTalonFX());
 
+                // No end effector on Agnes.
                 endEffector = new EndEffector(new EndEffectorIO() {});
 
+                // No elevator hardware on Agnes.
                 elevator = new Elevator(new ElevatorIO() {}, endEffector::isCoralBlockingElevator);
                 break;
 
             case SIM:
-                // Sim robot, instantiate physics sim IO implementations
+                // SIM MODE:
+                // We are running in simulation on a computer.
+                // Instantiate IO classes that simulate physics instead of talking to hardware.
                 drive =
                         new Drive(
                                 new GyroIO() {},
@@ -116,6 +156,7 @@ public class RobotContainer {
                                 new ModuleIOSim(TunerConstants.FrontRight),
                                 new ModuleIOSim(TunerConstants.BackLeft),
                                 new ModuleIOSim(TunerConstants.BackRight));
+                // We can optionally simulate vision. This is useful for testing auto/pose logic.
                 if (Constants.simWithVision) {
                     vision =
                             new Vision(
@@ -138,6 +179,7 @@ public class RobotContainer {
                                             VisionConstants.robotToCamera3,
                                             drive::getPose));
                 } else {
+                    // Vision disabled in sim, so use empty IO.
                     vision =
                             new Vision(
                                     drive::addVisionMeasurement,
@@ -156,7 +198,9 @@ public class RobotContainer {
                 break;
 
             default:
-                // Replayed robot, disable IO implementations
+                // REPLAY MODE (or any unknown mode):
+                // We are replaying a log file with AdvantageKit.
+                // Hardware is disabled, but subsystems still run so we can analyze behavior.
                 drive =
                         new Drive(
                                 new GyroIO() {},
@@ -182,15 +226,20 @@ public class RobotContainer {
                 break;
         }
 
-        // Change to false to run SysID routines
+        // AutoChooser builds a dashboard drop-down to select autos.
+        // The boolean enables/disables PathPlanner autos vs SysId testing.
         this.autoChooser = new AutoChooser(drive, true);
 
         autoChooser.onChange(this::updateAutonomousCommand);
 
+        // Superstructure is a helper subsystem that coordinates multiple mechanisms together
+        // (ex: align to a reef zone while raising elevator and preparing end effector).
         superstructure = new Superstructure(drive, endEffector, elevator);
 
+        // NamedCommands allow PathPlanner to reference our commands by string name in auto paths.
         registerNamedCommands();
 
+        // Simple example autonomous for testing (drive forward then stop).
         auto =
                 Commands.sequence(
                         Commands.run(() -> drive.runVelocity(new ChassisSpeeds(1, 0, 0)), drive)
@@ -199,7 +248,7 @@ public class RobotContainer {
                         Commands.runOnce(() -> drive.stop(), drive)
                                 .alongWith(Commands.print("Stopping!")));
 
-        // Configure the button bindings
+        // Configure the button bindings (controller -> commands)
         configureButtonBindings();
     }
 
@@ -210,7 +259,9 @@ public class RobotContainer {
      * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
      */
     private void configureButtonBindings() {
-        // Default command, normal field-relative drive
+        // DEFAULT COMMAND:
+        // While no other drive command is scheduled, `joystickDrive(...)` runs continuously.
+        // The lambda suppliers (() -> ...) read joystick values each loop.
         drive.setDefaultCommand(
                 DriveCommands.joystickDrive(
                         drive,
@@ -218,6 +269,10 @@ public class RobotContainer {
                         () -> -controller.getLeftX(),
                         () -> -controller.getRightX()));
 
+        // Button bindings:
+        // `onTrue` runs once when pressed, `whileTrue` runs continuously while held, and
+        // `onFalse` runs once when released. This is the command-based way to map buttons to robot
+        // actions.
         controller.povLeft().onTrue(endEffector.algaeRemoverOpen());
         controller.povRight().onTrue(endEffector.algaeRemoverClose());
         controller.y().onTrue(climb.putAwayIntake()).onTrue(climb.winchArmDeploy());
@@ -249,6 +304,8 @@ public class RobotContainer {
     }
 
     private void registerNamedCommands() {
+        // These commands can be called from PathPlanner by name.
+        // Notice we reuse the same commands as teleop; autos should be built from tested commands.
         NamedCommands.registerCommand(
                 "Score",
                 Commands.sequence(

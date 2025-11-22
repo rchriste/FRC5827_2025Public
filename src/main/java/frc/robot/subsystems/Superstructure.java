@@ -31,11 +31,15 @@ public final class Superstructure extends SubsystemBase {
     private final EndEffector endEffector;
     private final Elevator elevator;
 
-    // dashboard choosers
+    // Dashboard choosers:
+    // LoggedDashboardChooser writes to NetworkTables and reads selections back. Students can change
+    // these on the dashboard without redeploying code.
     private final LoggedDashboardChooser<List<Pose2d>> scoreDirectionChooser;
     private final LoggedDashboardChooser<ReefLevel> reefLevelSelector;
 
-    // distance from which to start raising the elevator when scoring
+    // Distance from which to start raising the elevator when scoring.
+    // Starting the lift early makes scoring faster, but starting too early risks tipping or
+    // collisions. Because this is a LoggedTunableNumber, we can tune it live and log the value.
     private final LoggedTunableNumber elevatorRaiseDistance =
             new LoggedTunableNumber("Elevator/RaiseDistance", 2.1);
 
@@ -52,16 +56,22 @@ public final class Superstructure extends SubsystemBase {
     }
 
     private void configureDashboardChoosers() {
+        // Reef level is which "peg height" we want for coral.
         reefLevelSelector.addOption("L1", ReefLevel.L1);
         reefLevelSelector.addOption("L2", ReefLevel.L2);
         reefLevelSelector.addOption("L3", ReefLevel.L3);
         reefLevelSelector.addDefaultOption("L4", ReefLevel.L4);
 
+        // Score direction lets the driver choose left vs right branch.
+        // We still auto-pick the closest zone, but this chooser decides which side within the zone.
         scoreDirectionChooser.addOption("Left", FieldConstants.Reef.leftBranchPositions2d);
         scoreDirectionChooser.addDefaultOption("Right", FieldConstants.Reef.rightBranchPositions2d);
     }
 
     private int getNearestZoneIndex() {
+        // Find the closest reef "zone" to where the robot will be in ~0.1s.
+        // This helps the driver a lot: the robot automatically targets the nearest scoring area
+        // instead of forcing the driver to pick exact pegs.
         return GeomUtil.getCurrentZone(
                 AllianceFlipUtil.apply(drive.getPoseLookahead(0.1)), FieldConstants.Reef.zones);
     }
@@ -71,6 +81,7 @@ public final class Superstructure extends SubsystemBase {
             new Transform2d(new Translation2d(0.41, 0.0), Rotation2d.k180deg);
 
     public Command scoreCommand() {
+        // Decide between full or short drawback based on elevator height, then eject coral.
         return Commands.either(
                         endEffector.drawback(), endEffector.shortDrawback(), elevator::isAtL4)
                 .andThen(endEffector.ejectToReef())
@@ -78,6 +89,11 @@ public final class Superstructure extends SubsystemBase {
     }
 
     public Command intakeCommand() {
+        // Intake sequence:
+        //  1) lower elevator to station height
+        //  2) spin intake rollers
+        //  3) when finished, if we were interrupted AND coral is blocking elevator, keep intaking
+        //     briefly and then lower elevator for safety.
         return elevator.goToStationHeight()
                 .alongWith(endEffector.takeFromIntake())
                 .finallyDo(
@@ -95,6 +111,8 @@ public final class Superstructure extends SubsystemBase {
     }
 
     public Command elevatorScorePosition() {
+        // Defer means "wait until the command is scheduled to decide what to do".
+        // We wait until the robot is close enough to the reef, then raise to the selected level.
         return Commands.defer(
                 () ->
                         Commands.waitUntil(
@@ -115,6 +133,8 @@ public final class Superstructure extends SubsystemBase {
     }
 
     public Command alignToScore() {
+        // Auto-align to the nearest zone and selected left/right branch.
+        // If no zone is nearby, do nothing.
         return Commands.defer(
                 () -> {
                     int zone = getNearestZoneIndex();
@@ -133,6 +153,7 @@ public final class Superstructure extends SubsystemBase {
     }
 
     public Command dealgifyCommand() {
+        // Similar to scoring, but targets the algae height for the current zone.
         return Commands.defer(
                 () -> {
                     int zone = getNearestZoneIndex();
@@ -156,6 +177,8 @@ public final class Superstructure extends SubsystemBase {
     public void periodic() {
         double startTime = Timer.getFPGATimestamp();
         if (Constants.currentMode == Constants.Mode.REPLAY) {
+            // In replay, log the reef zones and our selected zone so we can visualize decisions in
+            // AdvantageScope.
             int nearestZoneIndex = getNearestZoneIndex();
             Logger.recordOutput("Drive/Zones", FieldConstants.Reef.zones);
             Logger.recordOutput(

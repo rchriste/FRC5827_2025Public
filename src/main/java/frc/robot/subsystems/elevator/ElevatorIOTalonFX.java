@@ -56,20 +56,27 @@ public class ElevatorIOTalonFX implements ElevatorIO {
         followMotor.setControl(
                 new Follower(
                         leadMotor.getDeviceID(),
-                        false)); // The motors need to spin the same direction, hence the false for
-        // inversion
+                        false)); // Follower keeps both motors synced; false means same direction.
         config = new TalonFXConfiguration();
 
+        // Configure motor/controller behavior. These numbers should match the real mechanism.
         config.Feedback.SensorToMechanismRatio = Elevator.GEAR_REDUCTION;
         config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
+
+        // Safety limits:
+        // Current limit protects motors and wiring if elevator stalls.
         config.CurrentLimits.SupplyCurrentLimitEnable = true;
         config.CurrentLimits.SupplyCurrentLimit = CURRENT_LIMIT;
+
+        // Soft limits prevent driving past physical travel and damaging the robot.
         config.SoftwareLimitSwitch.ForwardSoftLimitThreshold =
                 Elevator.convertMetersToRotations(1.7);
         config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
         config.SoftwareLimitSwitch.ReverseSoftLimitThreshold =
                 Elevator.convertMetersToRotations(-0.01);
         config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
+
+        // Slot0 PID values for position control (kept in sync with Elevator.kP/kD tunables).
         config.Slot0.kP = Elevator.kP.getAsDouble();
         config.Slot0.kD = Elevator.kD.getAsDouble();
 
@@ -142,6 +149,9 @@ public class ElevatorIOTalonFX implements ElevatorIO {
     @Override
     public void setElevatorState(
             double targetPositionMeters, double targetVelocityMpS, double feedForwardVoltage) {
+        // Position + velocity + feedforward control.
+        // FeedforwardVoltage here is the "predictive" part that helps the elevator move quickly and
+        // smoothly under load.
         leadMotor.setControl(
                 positionRequest
                         .withPosition(Elevator.convertMetersToRotations(targetPositionMeters))

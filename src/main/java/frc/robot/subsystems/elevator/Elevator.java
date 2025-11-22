@@ -27,24 +27,32 @@ public class Elevator extends SubsystemBase {
     private final ElevatorIOInputsAutoLogged inputs;
     private final LoggedTunableNumber openLoopVoltage =
             new LoggedTunableNumber("Elevator/Voltage", 1.0);
+    // Feedforward is a physics-based guess of how much voltage we need to lift/hold the elevator.
+    // Using feedforward makes the elevator feel faster and more consistent ("predictive" control).
     private final ElevatorFeedforward feedForward;
     private TrapezoidProfile motionProfile;
     private TrapezoidProfile.State currentState, goalState;
+    // Provided by EndEffector: true when coral would jam the elevator if we move it.
     private final BooleanSupplier elevatorBlocked;
 
+    // Mechanical constants for conversions and motion limits.
     static final double bottomPositionMeters = 0;
 
     static final double SPROCKET_RADIUS_METERS = Units.inchesToMeters(1.9153 / 2.0);
     static final double GEAR_REDUCTION = 5.0;
 
+    // PID constants for position control. LoggedTunableNumber lets us tune live and log changes.
     static final LoggedTunableNumber kP = new LoggedTunableNumber("Elevator/kP", 8);
     static final LoggedTunableNumber kD = new LoggedTunableNumber("Elevator/kD", 0);
 
+    // Feedforward constants (see WPILib ElevatorFeedforward docs).
+    // kS: static friction, kG: gravity, kV: velocity term, kA: acceleration term.
     static final LoggedTunableNumber kS = new LoggedTunableNumber("Elevator/kS", 0.3);
     static final LoggedTunableNumber kG = new LoggedTunableNumber("Elevator/kG", 0.2);
     static final LoggedTunableNumber kV = new LoggedTunableNumber("Elevator/kV", 2.6);
     static final LoggedTunableNumber kA = new LoggedTunableNumber("Elevator/kA", 0.1);
 
+    // Trapezoid motion profile limits (how fast and how hard we accelerate in closed loop).
     static final LoggedTunableNumber trapezoidMaxVelocity =
             new LoggedTunableNumber("Elevator/Velocity", 3.0);
     static final LoggedTunableNumber trapezoidMaxAcceleration =
@@ -65,6 +73,9 @@ public class Elevator extends SubsystemBase {
             Units.rotationsToRadians(convertMetersToRotations(0.2)); // 20 cm
     private final double velocityToleranceMeters =
             Units.rotationsToRadians(convertMetersToRotations(0.2));
+    // Zeroing:
+    // When the robot enables, we slowly drive down until the elevator stalls at the bottom.
+    // The debouncer prevents noise from falsely marking us "zeroed".
     private final Debouncer zeroedDebouncer = new Debouncer(0.2);
     private boolean atSetpoint = false;
     private boolean doProfiling = false;
@@ -98,6 +109,7 @@ public class Elevator extends SubsystemBase {
         this.io = io;
         this.elevatorBlocked = elevatorBlocked;
 
+        // Initialize feedforward and motion profile using the current tunable values.
         feedForward = new ElevatorFeedforward(kS.get(), kG.get(), kV.get(), kA.get());
         motionProfile =
                 new TrapezoidProfile(
@@ -120,6 +132,7 @@ public class Elevator extends SubsystemBase {
 
         double feedForwardVoltage = 0;
         if (!zeroed) {
+            // Not zeroed yet: drive downward gently until we hit the hard stop.
             if (DriverStation.isEnabled()
                     && zeroedDebouncer.calculate(
                             MathUtil.isNear(0.0, inputs.velocityMetersPerSecond, 0.05))) {
@@ -130,6 +143,9 @@ public class Elevator extends SubsystemBase {
                 io.setElevatorVoltage(-zeroingVoltage.get());
             }
         } else if (doProfiling) {
+            // Closed-loop motion profiling:
+            // Each loop, TrapezoidProfile calculates the next desired state. We add feedforward
+            // voltage and let the motor controller handle the PID.
             var newState = motionProfile.calculate(0.02, currentState, goalState);
             feedForwardVoltage =
                     feedForward.calculateWithVelocities(currentState.velocity, newState.velocity);
@@ -151,6 +167,7 @@ public class Elevator extends SubsystemBase {
         atSetpoint = checkPosition && checkVelocity;
         Logger.recordOutput("Elevator/AtSetpoint", atSetpoint);
 
+        // Live tuning support:
         if (kP.hasChanged(this.hashCode()) || kD.hasChanged(this.hashCode())) {
             io.updatePID(kP.getAsDouble(), kD.getAsDouble());
         }
@@ -173,6 +190,7 @@ public class Elevator extends SubsystemBase {
                                     trapezoidMaxVelocity.get(), trapezoidMaxAcceleration.get()));
         }
 
+        // Safety alert if coral would jam the elevator.
         coralBlockingAlert.set(this.elevatorBlocked.getAsBoolean());
         Logger.recordOutput("PeriodicTime/Elevator", (Timer.getFPGATimestamp() - startTime) * 1000);
     }
@@ -201,6 +219,8 @@ public class Elevator extends SubsystemBase {
     }
 
     private Command closedLoopToPosition(DoubleSupplier heightSupplier) {
+        // This helper makes a command that updates the goal position ONCE, then waits until the
+        // elevator reaches that goal.
         return this.runOnce(
                         () -> {
                             if (!this.elevatorBlocked.getAsBoolean()) {

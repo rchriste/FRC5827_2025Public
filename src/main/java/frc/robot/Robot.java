@@ -38,7 +38,9 @@ public class Robot extends LoggedRobot {
     private RobotContainer robotContainer;
 
     public Robot() {
-        // Record metadata
+        // AdvantageKit logging:
+        // We record build and git info so every log file tells us exactly what code was on the
+        // robot during a match. This is critical for debugging later in AdvantageScope.
         Logger.recordMetadata("ProjectName", BuildConstants.MAVEN_NAME);
         Logger.recordMetadata("BuildDate", BuildConstants.BUILD_DATE);
         Logger.recordMetadata("GitSHA", BuildConstants.GIT_SHA);
@@ -56,7 +58,10 @@ public class Robot extends LoggedRobot {
                 break;
         }
 
-        // Set up data receivers & replay source
+        // Choose where logs go based on the current mode.
+        // Real robot -> log to USB and publish to NetworkTables.
+        // Sim -> publish to NetworkTables so AdvantageScope/Glass can view live.
+        // Replay -> read an existing log file and re-log simulated outputs.
         switch (Constants.currentMode) {
             case COMPETITION:
             case AGNES:
@@ -80,7 +85,7 @@ public class Robot extends LoggedRobot {
                 break;
         }
 
-        // Start AdvantageKit logger
+        // Start AdvantageKit logger. After this, calls to Logger.recordOutput(...) will be saved.
         Logger.start();
 
         // Check for valid swerve config
@@ -103,8 +108,8 @@ public class Robot extends LoggedRobot {
             }
         }
 
-        // Instantiate our RobotContainer. This will perform all our button bindings,
-        // and put our autonomous chooser on the dashboard.
+        // Create RobotContainer. This sets up subsystems, binds controller buttons to commands,
+        // and configures our autonomous chooser.
         robotContainer = new RobotContainer();
     }
 
@@ -114,11 +119,15 @@ public class Robot extends LoggedRobot {
         // Switch thread to high priority to improve loop timing
         Threads.setCurrentThreadPriority(true, 99);
 
-        // Runs the Scheduler. This is responsible for polling buttons, adding
-        // newly-scheduled commands, running already-scheduled commands, removing
-        // finished or interrupted commands, and running subsystem periodic() methods.
-        // This must be called from the robot's periodic block in order for anything in
-        // the Command-based framework to work.
+        // CommandScheduler is the heart of command-based.
+        // Every 20ms it:
+        //  - checks joystick buttons/triggers
+        //  - schedules new commands when buttons are pressed
+        //  - runs the execute() of scheduled commands
+        //  - calls periodic() on every subsystem
+        //  - ends commands that finish or are interrupted
+        // If you ever see "nothing happens when we press a button", this call is the first thing
+        // to check.
         CommandScheduler.getInstance().run();
 
         // Return to normal thread priority

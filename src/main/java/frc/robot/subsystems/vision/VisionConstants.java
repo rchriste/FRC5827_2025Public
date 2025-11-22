@@ -22,18 +22,30 @@ import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.util.Units;
 
 public class VisionConstants {
-    // AprilTag layout
+    // AprilTag layout for the current game field.
+    // PhotonVision uses this to convert camera-to-tag measurements into field coordinates.
     public static AprilTagFieldLayout aprilTagLayout =
             AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
 
-    // Camera names, must match names configured on coprocessor
+    // Camera names. These MUST match the names configured in PhotonVision on the coprocessor.
+    // If the names don't match, VisionIOPhotonVision will never connect.
     public static String camera0Name = "F-STAR";
     public static String camera1Name = "F-PORT";
     public static String camera2Name = "B-STAR";
     public static String camera3Name = "B-PORT";
 
-    // Robot to camera transforms
-    // (Not used by Limelight, configure in web UI instead)
+    // Robot-to-camera transforms.
+    // Each Transform3d describes where the camera is mounted on the robot:
+    //  - X forward (+inches toward front bumper)
+    //  - Y left (+inches toward left side)
+    //  - Z up (+inches off the floor)
+    // and its rotation (yaw/pitch/roll).
+    //
+    // Getting these values correct is critical: if a camera is "told" it's in the wrong spot,
+    // the AprilTag pose estimates will be wrong and the robot will think it's somewhere else
+    // on the field.
+    //
+    // (Not used by Limelight, which is configured in its web UI instead.)
     public static Transform3d robotToCamera0 =
             new Transform3d(
                     Units.inchesToMeters(11.081),
@@ -59,12 +71,14 @@ public class VisionConstants {
                     Units.inchesToMeters(20.316),
                     new Rotation3d(Degrees.of(0), Degrees.of(-20), Degrees.of(165)));
 
-    // Basic filtering thresholds
+    // Basic filtering thresholds for deciding if a vision pose is believable.
     public static double maxAmbiguity = 0.3;
     public static double maxZError = 0.75;
 
-    // Standard deviation baselines, for 1 meter distance and 1 tag
-    // (Adjusted automatically based on distance and # of tags)
+    // Standard deviation baselines for vision measurement noise.
+    // These are for ~1 meter distance and 1 tag, and are scaled dynamically based on:
+    //  - distance to tags
+    //  - number of tags seen
     public static double linearStdDevBaseline = 0.15; // Meters
     public static double angularStdDevBaseline = 0.6; // Radians
 

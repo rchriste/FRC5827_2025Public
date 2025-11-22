@@ -9,4 +9,3 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 ```
 
 This sets the WPILib 2025 JDK as the active Java runtime for Gradle, then runs the standard build.
-

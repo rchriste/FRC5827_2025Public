@@ -67,6 +67,10 @@ public class DriveCommands {
 
     /**
      * Field relative drive command using two joysticks (controlling linear and angular velocities).
+     *
+     * <p>Notice the parameters are {@link DoubleSupplier}s rather than raw doubles. This lets us
+     * pass lambdas like {@code () -> controller.getLeftY()}, so the command reads the joystick live
+     * every 20ms while it is running.
      */
     public static Command joystickDrive(
             Drive drive,

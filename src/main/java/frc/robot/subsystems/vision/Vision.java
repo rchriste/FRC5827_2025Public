@@ -35,6 +35,23 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Supplier;
 
+/**
+ * Vision subsystem.
+ *
+ * <p>This subsystem reads AprilTag detections from one or more cameras (PhotonVision or Limelight),
+ * turns them into robot pose estimates, and feeds those estimates into the Drive pose estimator.
+ *
+ * <p>We use the AdvantageKit IO pattern here:
+ *
+ * <ul>
+ *   <li>{@link VisionIO} describes what data a camera can provide.
+ *   <li>{@link VisionIOPhotonVision} and {@link VisionIOPhotonVisionSim} are concrete
+ *       implementations for real cameras vs simulation.
+ * </ul>
+ *
+ * <p>All outputs are logged so we can visualize what the cameras saw in AdvantageScope during a
+ * match or in simulation.
+ */
 public class Vision extends SubsystemBase {
     private final VisionConsumer consumer;
     private final VisionIO[] io;
@@ -72,13 +89,13 @@ public class Vision extends SubsystemBase {
         this.io = io;
         this.poseSupplier = poseSupplier;
 
-        // Initialize inputs
+        // Each camera gets its own inputs object for AdvantageKit logging.
         this.inputs = new VisionIOInputsAutoLogged[io.length];
         for (int i = 0; i < inputs.length; i++) {
             inputs[i] = new VisionIOInputsAutoLogged();
         }
 
-        // Initialize disconnected alerts
+        // Disconnected alerts warn the driver/mentor if a camera is unplugged or rebooting.
         this.disconnectedAlerts = new Alert[io.length];
         for (int i = 0; i < inputs.length; i++) {
             disconnectedAlerts[i] =
@@ -105,18 +122,18 @@ public class Vision extends SubsystemBase {
             Logger.processInputs("Vision/Camera" + Integer.toString(i), inputs[i]);
         }
 
-        // Initialize logging values
+        // Prepare lists to log combined data across all cameras.
         List<Pose3d> allTagPoses = new LinkedList<>();
         List<Pose3d> allRobotPoses = new LinkedList<>();
         List<Pose3d> allRobotPosesAccepted = new LinkedList<>();
         List<Pose3d> allRobotPosesRejected = new LinkedList<>();
 
-        // Loop over cameras
+        // Loop over cameras and process their observations.
         for (int cameraIndex = 0; cameraIndex < io.length; cameraIndex++) {
             // Update disconnected alert
             disconnectedAlerts[cameraIndex].set(!inputs[cameraIndex].connected);
 
-            // Initialize logging values
+            // Per-camera log lists.
             List<Pose3d> tagPoses = new LinkedList<>();
             List<Pose3d> robotPoses = new LinkedList<>();
             List<Pose3d> robotPosesAccepted = new LinkedList<>();
@@ -124,7 +141,7 @@ public class Vision extends SubsystemBase {
             List<Double> xTagCorners = new LinkedList<>();
             List<Double> yTagCorners = new LinkedList<>();
 
-            // Add tag poses
+            // Add poses for any tags the camera could see (for visualization).
             for (int tagId : inputs[cameraIndex].tagIds) {
                 var tagPose = aprilTagLayout.getTagPose(tagId);
                 if (tagPose.isPresent()) {
@@ -132,6 +149,8 @@ public class Vision extends SubsystemBase {
                 }
             }
 
+            // Log the detected tag corners in camera pixel space.
+            // In AdvantageScope this helps us see what the camera was actually detecting.
             for (var corners : inputs[cameraIndex].photonPipelineResult.targets) {
                 for (var corner : corners.detectedCorners) {
                     xTagCorners.add(corner.x);
@@ -139,9 +158,15 @@ public class Vision extends SubsystemBase {
                 }
             }
 
-            // Loop over pose observations
+            // Loop over pose observations produced by the camera pipeline.
             for (var observation : inputs[cameraIndex].poseObservations) {
-                // Check whether to reject pose
+                // Decide whether to reject the pose as unreliable.
+                // We reject if:
+                //  - no tags seen
+                //  - single-tag solve with high ambiguity
+                //  - Z height seems unrealistic (robot isn't flying)
+                //  - pose is outside field boundaries
+                //  - rear cameras (index >= 2) are very far from current estimated pose
                 boolean rejectPose =
                         observation.tagCount() == 0 // Must have at least one tag
                                 || (observation.tagCount() == 1
@@ -164,7 +189,7 @@ public class Vision extends SubsystemBase {
                                                                 poseSupplier.get().getTranslation())
                                                 >= 1.0);
 
-                // Add pose to log
+                // Log all poses so we can compare accepted vs rejected in AdvantageScope.
                 robotPoses.add(observation.pose());
                 if (rejectPose) {
                     robotPosesRejected.add(observation.pose());
@@ -172,12 +197,13 @@ public class Vision extends SubsystemBase {
                     robotPosesAccepted.add(observation.pose());
                 }
 
-                // Skip if rejected
+                // Skip sending to Drive if rejected.
                 if (rejectPose) {
                     continue;
                 }
 
-                // Calculate standard deviations
+                // Calculate measurement noise (standard deviations).
+                // Farther tags and fewer tags => less trust (higher std dev).
                 double stdDevFactor =
                         Math.pow(observation.averageTagDistance(), 2.0) / observation.tagCount();
                 double linearStdDev = linearStdDevBaseline * stdDevFactor;
@@ -191,7 +217,7 @@ public class Vision extends SubsystemBase {
                     angularStdDev *= cameraStdDevFactors[cameraIndex];
                 }
 
-                // Send vision observation
+                // Send accepted vision observation into Drive pose estimator.
                 consumer.accept(
                         observation.pose().toPose2d(),
                         observation.timestamp(),
